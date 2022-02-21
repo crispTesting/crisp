@@ -1,36 +1,62 @@
 #!/usr/bin/env python
 
-####                                                                              ####
-#  This is a simple test script for controlling the motor and servo of the car.      #
-#                                                                                    #
-#   This should be called from another script, when implementing for driving the car #                          
-####                                                                              ####
- 
 import sys
 import rospy
 from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
+import time
 
-                                                                       
-def talker():
-    # Creating a publisher which publishes the control commands onto the ROS topic /vesc/low_level/ackermann_cmd_mux/input/navigation
-    pub = rospy.Publisher('/vesc/low_level/ackermann_cmd_mux/input/navigation', AckermannDriveStamped , queue_size=1)
-    # Initiating the node
-    rospy.init_node('best_node_ever', anonymous=True)
 
-    # The ackerman message needed to send control signals to motor and servo.
-    drive_msg = AckermannDriveStamped()
-    # Servo control, ranges between - x -> + x, 0 = no steering. 
-    drive_msg.drive.steering_angle = 0
-    # Linear velocity, ranges -x -> + x, 0.0 = no velocity.
-    drive_msg.drive.speed = 1.0
+class racer():
 
-    # As long as the script is not shutdown it will continuosly publish control commands to the topic
-    while not rospy.is_shutdown():
-        pub.publish(drive_msg)
+    def __init__(self):
+        self.pub = rospy.Publisher('/vesc/low_level/ackermann_cmd_mux/input/navigation', AckermannDriveStamped , queue_size=1)
+
+        self.count = 0
+
+    def set_speed(self, linear, angular):
+        drive_msg = AckermannDriveStamped()
+        drive_msg.drive.steering_angle = angular
+        drive_msg.drive.speed = linear
+        self. pub.publish(drive_msg)
     
 
 if __name__=='__main__':
-    try:
-        talker()
-    except rospy.ROSInterruptException:
-        pass
+    rospy.init_node('best_node_ever', anonymous=True)
+    print("node initialized")
+    car = racer()
+    print("Sampling rate set to 100Hz")
+    rate = rospy.Rate(500)
+    print("speed set to 1.0")
+    speed = 1.0
+
+    while not rospy.is_shutdown():
+        car.count = car.count + 1
+        #rospy.loginfo(car.count)
+        if (car.count == 20000):
+           # print("speed increased")
+            speed = 2.0
+        elif (car.count == 40000):
+           # print("Increasing")
+            speed = 3.0
+        elif (car.count == 60000):
+          #  print("Breaking")
+            speed = 2.0
+        elif (car.count == 80000):
+         #   print("Breaking")
+            speed = 1.0
+        elif (car.count == 100000):
+        #    print("Stopping")
+            speed = 0.0
+        try:
+            car.set_speed(speed, 0.0)
+        except rospy.ROSInterruptException:
+            pass
+        print(car.count)
+        rate.sleep()
+
+        #)) Compensation on the servo to drive straight at different speeds.
+        # At speed 1.0 servo = 0.005
+        # At speed 2.0 servo = 0.0
+        # At speed 3.0 servo slightly drifting right  
+        # At speed 4.0 servo = 
+        # At speed 5.0 servo = 
