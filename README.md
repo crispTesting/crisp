@@ -1,3 +1,7 @@
 # CriSp
 
-This is going to be a project for autonomous driving and testing.
+Bag files contains recorded data. And also a script for how to extract the data using bagpy.
+
+Camera is the package made in ROS. Currently only containing the scripts.
+
+
