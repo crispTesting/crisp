@@ -1,6 +1,26 @@
 import numpy as np
 import cv2
 import math
+import random
+
+
+def get_horizontals(img, img_height):
+    found_horizontals = []
+
+    scalar = 0.01
+    for i in range(10, 100, 10):
+        horizontal = int( img_height*(i*scalar) )
+        found_horizontals.append(horizontal)
+
+    return found_horizontals
+
+def find_lane(horizontal_list, img):
+    found_lane = []
+
+    for horizontal in horizontal_list:
+        found_lane.append(scan_for_lane_mid(horizontal, img))
+
+    return found_lane
 
 def scan_for_lane_mid(horizontal, img):
     '''
@@ -42,13 +62,13 @@ def scan_for_lane_mid(horizontal, img):
     
     for k in range(left_lane, 0, -1):
         if img[horizontal][k] != LANE:
-            print("FOUND THE LEFT END")
+            #print("FOUND THE LEFT END")
             left_lane_end = k-1
             break
     
     for l in range(right_lane, width, 1):
         if img[horizontal][l] != LANE:
-            print("FOUND THE RIGHT END")
+            #print("FOUND THE RIGHT END")
             right_lane_end = l-1
             break
     
@@ -177,6 +197,34 @@ def draw_horizontals(img, horizontals):
     #cv2.line(img, (horizontals[5][1], horizontals[5][0]), (horizontals[5][2], horizontals[5][0]), color=(0, 0, 255), thickness=2)
     return img
 
+def draw_horizontals_dynamic(img, horizontals):
+    '''
+        Draws horizontal lines on a image.
+
+        Parameters:
+        --------------------
+        img (img) : The image to draw on
+        horizontals (list) : a 2d list where each list contains of,
+                            0 : the height of the horizontal line
+                            1: the left lane
+                            2: the right lane
+        
+        Returns:
+        --------------------
+        img (img) : The image drawn on
+    '''
+    # horizontals[0][0] The horizontal
+    # horizontals[0][1] The left lane
+    # horizontals[0][2] The right lane
+    print(f"LEN OF HORIZONTALS IN DRAW:\tlen(horizontals)")
+    for i in range(len(horizontals)):
+        red = random.randint(0, 255)
+        blue = random.randint(0, 255)
+        green = random.randint(0, 255)
+        cv2.line(img, (horizontals[i][1], horizontals[i][0]), (horizontals[i][2], horizontals[i][0]), color=(blue, green, red), thickness=2)
+
+    return img
+
 def draw_heading(img, horizontals, middlepoints):
     '''
         Draws the heading line on an image.
@@ -227,8 +275,8 @@ def get_lateral_error(img_midpoint, lane_midpoint, pw_to_cm):
         lateral_error = d_expected - d_actual.
         
     '''
-    lateral_error = img_midpoint - lane_midpoint 
-    print(f"Lateral error:\t{lateral_error*pw_to_cm} cm")
+    lateral_error = (img_midpoint - lane_midpoint) / pw_to_cm 
+    return lateral_error
 
 def get_heading_error(theta_actual):
     '''
@@ -243,8 +291,10 @@ def get_heading_error(theta_actual):
               theta_actual is the actual number of pixels in the bottom row that make up the lane at the moment.
     '''
     # theta_normal = 30
-    print(f"ACTUAL ACTUAL ACTUAL:\t\t{theta_actual}")
-    heading_error = math.degrees(math.cos(30/theta_actual))
+    if theta_actual == 0:
+        return -1
+
+    heading_error = math.degrees(math.cos(5/theta_actual))
 
     #if heading_error < -1:
     #    heading_error = -1
@@ -253,14 +303,64 @@ def get_heading_error(theta_actual):
     
     return heading_error
 
-def get_curvature():
+def get_curvature(x1, x2, x3, x4, y1, y2, y3, y4):
     '''
         Draws a line from two top points and another line from two bottom points.
         The angle between will be calculated as the curvature.
 
-        This can be done using tan.
+        #########################################################################
+        #                                                                       #
+        #        Theta = ( m_1 - m_2 ) / ( 1 + m_1 * m_2)                       #
+        #                                                                       #
+        #    Where m_1 and m_2 is the slope of intersecting lines.              #
+        #                                                                       #
+        #########################################################################
+
+        Parameters:
+        --------------------
+        x1, x2 (int) : Start and end for x of first line
+        x2, x3 (int) : Start and end for x of second line
+        y1, y2 (int) : Start and end for y of first line
+        y3, y4 (int) : Start and end for y of second line
+
+        Returns:
+        --------------------
+        theta (float) : The angle of curvature in degrees
     '''
-    pass
+    m1 = get_slope(x1,x2,y1,y2)
+    m2 = get_slope(x3,x4,y3,y4)
+
+    if (m1 != -1 and m2 != -1):
+        theta = math.degrees(math.atan((m1-m2) / (1+m1*m2)))
+        return theta
+    
+    return -1
+
+def get_slope(x_1, x_2, y_1, y_2):
+    '''
+        Calculates the slope of a line.
+
+        #########################################################################
+        #                                                                       #
+        #        m = (y_2 - y_1) / (x_2-x_1)                                    #
+        #                                                                       #
+        #########################################################################
+
+        Parameters:
+        --------------------
+        x_1 (int) : Start x of line
+        x_2 (int) : End x of line
+        y_1 (int) : Start y of line
+        y_2 (int) : End y of line
+
+        Returns:
+        --------------------
+        The slope of the line (float)
+    '''
+    if (x_2-x_1) == 0:
+        return -1
+    else:
+        return (y_2-y_1) / (x_2-x_1)
 
 def get_pw_to_cm_conversion_constant(right_lane, left_lane):
     '''
@@ -283,11 +383,9 @@ def get_pw_to_cm_conversion_constant(right_lane, left_lane):
     if  lane_width_in_pixels == 0:
         lane_width_in_pixels = 1
 
-    px_to_cm = 45 / lane_width_in_pixels
+    px_to_cm =  lane_width_in_pixels / 45 
     return px_to_cm
 
-
- 
 def controller(lateral_error, heading_error, curvature=0, kp=1, kd=1, kc=1):
     '''
         The control algorithm driving the car.
@@ -297,6 +395,25 @@ def controller(lateral_error, heading_error, curvature=0, kp=1, kd=1, kc=1):
 
     '''
     return kp * (lateral_error + kd * math.sin(heading_error) + kc * curvature)
+
+def print_lane_data(lane_data):
+    print()
+    print("*************************************************************************************************")
+    print("*\t\t\t\t\tLANE DETECTION DATA\t\t\t\t\t*")
+    print("*\t\t\t\t\t\t\t\t\t\t\t\t*")                                                                         
+    print("*\tLEFT:\tLEFT END:\tRIGHT:\tRIGHT END:\tY:\tMid\tpw to cm\t\t*")
+
+    for i in range(len(lane_data)):
+        print(f"*{i}:\t{lane_data[i][0]}\t{lane_data[i][1]}\t\t{lane_data[i][2]}\t{lane_data[i][3]}\t\t{lane_data[i][4]}\t{lane_data[i][5]}\t{lane_data[i][6]}\t*")    
+
+    print("*************************************************************************************************")
+    print("\n")
+
+    #print(f"*First:\t{h1_l}\t{h1_l_e}\t\t{h1_r}\t{h1_r_e}\t\t{bottom_horizontal}\t{m1}\t{h1_c}\t*")
+    #print(f"*Second:{h2_l}\t{h2_l_e}\t\t{h2_r}\t{h2_r_e}\t\t{mid_horizontal}\t{m2}\t{h2_c}\t*")
+    #print(f"*Third:\t{h2_l_2}\t{h2_l_e_2}\t\t{h2_r_2}\t{h2_r_e_2}\t\t{mid_horizontal_2}\t{m2_2}\t{h2_c}\t*")
+    #print(f"*Fourth\t{h3_l}\t{h3_l_e}\t\t{h3_r}\t{h3_r_e}\t\t{top_horizontal}\t{m3}\t{h3_c}\t\t\t*")
+
 
 
 
